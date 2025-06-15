@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>HW5</title>
+		<style>
+			@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&display=swap');
+			body { margin: 0; }
+			#score-container {
+				position: absolute;
+				top: 20px;
+				left: 20px;
+				font-family: Arial, sans-serif;
+				background-color: black;
+				padding: 20px 70px;
+				border-radius: 1em;
+				border: 0.5px solid white;
+				box-shadow: rgba(50, 50, 93, 0.25) 0px 30px 60px -12px inset, rgba(0, 0, 0, 0.3) 0px 18px 36px -18px inset;
+			}
+			#score-headline{
+				font-size: 14px;
+				color: white;
+				text-align: center;
+				font-family: "Orbitron", sans-serif;
+			}
+			#score-number{
+				text-align: center;
+				color: white;
+				font-size: 30px;
+				font-family: "Orbitron", sans-serif;
+				padding: 0;
+				margin: 0;
+				text-shadow: 0 0 3px #FF0000;
+			}
+			#controls-container {
+				position: absolute;
+				bottom: 20px;
+				left: 20px;
+				padding: 10px 16px;
+				background-color: rgba(0, 0, 0, 0.6);
+				color: #ffffff;
+				font-family: Arial, sans-serif;
+				font-size: 16px;
+				border-radius: 8px;
+				box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+				z-index: 10;
+			}
+
+			#controls-container h3 {
+				margin: 0 0 8px;
+				font-size: 18px;
+			}
+
+			#controls-container p {
+				margin: 4px 0;
+				font-size: 14px;
+			}
+						
+		</style>
+		<script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'></script>
+	</head>
+	<body>
+		<div id="score-container">
+			<p id="score-headline">SCORE:</p>
+			<p id="score-number">0</p>
+		</div>			
+		<div id="controls-container">
+			<h3>Controls</h3>
+			<p>O – Toggle orbit camera</p>
+		</div>
+		
+		<script src="src/hw5.js" type="module"></script>
+
+	</body>
+</html>
