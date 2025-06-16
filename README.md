@@ -24,14 +24,14 @@
 
 ## Features Implemented
 **Must-Have Features:**
-- 3D Basketball Court: Full court rendered using Three.js with proper dimensions (30m x 15m)
+- 3D Basketball Court: Full court rendered using Three.js with proper dimensions (20x10 - 2:1 relation)
 - Basketball Hoops: Two complete basketball hoops with:
     - Support structures with cylindrical bases for stability
-    - Proper rim dimensions (45cm diameter) at correct height (3.05m)
+    - Proper rim dimensions at correct height (10 feet)
     - Backboards with correct proportions (1.8m x 1.05m)
     - Realistic net rendering with 8 individual strands
 - Static Basketball: Detailed basketball object with:
-    - Proper size (24cm diameter)
+    - Proper size 
     - Realistic seam lines positioned correctly on ball surface
 - Lighting and shadows for realism
 - Court Markings: Complete court line system including:
