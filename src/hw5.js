@@ -172,6 +172,42 @@ function createSupportStructure(group){
   
 }
 
+function createWhiteRectangle(width, height, thickness = 0.03) {
+  const group = new THREE.Group();
+  const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  
+  // Top line
+  const topLine = new THREE.Mesh(
+    new THREE.BoxGeometry(width, thickness, thickness),
+    material
+  );
+  topLine.position.set(0, height/2, 0);
+  
+  // Bottom line  
+  const bottomLine = new THREE.Mesh(
+    new THREE.BoxGeometry(width, thickness, thickness),
+    material
+  );
+  bottomLine.position.set(0, -height/2, 0);
+  
+  // Left line
+  const leftLine = new THREE.Mesh(
+    new THREE.BoxGeometry(thickness, height, thickness),
+    material
+  );
+  leftLine.position.set(-width/2, 0, 0);
+  
+  // Right line
+  const rightLine = new THREE.Mesh(
+    new THREE.BoxGeometry(thickness, height, thickness),
+    material
+  );
+  rightLine.position.set(width/2, 0, 0);
+  
+  group.add(topLine, bottomLine, leftLine, rightLine);
+  return group;
+}
+
 function createBasketballHoop(x, y, z, facing){
   const group = new THREE.Group();
   createSupportStructure(group);
@@ -188,17 +224,22 @@ function createBasketballHoop(x, y, z, facing){
   group.add(backboard);
 
   // BRANDED BACKBOARD (Bonus): 
-  const outline = [
-    [-0.9, 0.525], [0.9, 0.525], [0.9, -0.525], [-0.9, -0.525]
-  ].map(([x, y]) => new THREE.Vector3(x, 3.7 + y, 0.3));
-  const box = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(outline), new THREE.LineBasicMaterial({ color: 0xffffff }));
-  group.add(box);
+  // Large rectangle (backboard outline)
+  const backboardOutline = createWhiteRectangle(1.7, 1.02, 0.05);
+  backboardOutline.position.set(0, 3.7, 0.3); 
+  group.add(backboardOutline);
+  // Small rectangle (inner target)
+  const targetRectangle = createWhiteRectangle(0.6, 0.35, 0.04); // Smaller and thinner
+  targetRectangle.position.set(0, 3.6, 0.3); 
+  group.add(targetRectangle);
+  /// ---
 
-  const middleRectangle = [
-   [-0.3, 0.2], [0.3, 0.2], [0.3, -0.2], [-0.3, -0.2]
-  ].map(([x, y]) => new THREE.Vector3(x, 3.7 + y, 0.3));
-  const box2 = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(middleRectangle), new THREE.LineBasicMaterial({ color: 0xffffff}));
-  group.add(box2);
+
+  // const middleRectangle = [
+  //  [-0.3, 0.2], [0.3, 0.2], [0.3, -0.2], [-0.3, -0.2]
+  // ].map(([x, y]) => new THREE.Vector3(x, 3.7 + y, 0.3));
+  // const box2 = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(middleRectangle), new THREE.LineBasicMaterial({ color: 0xffffff}));
+  // group.add(box2);
   // ---- 
 
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 8, 32), new THREE.MeshPhongMaterial({ color: 0xff6600 }));
