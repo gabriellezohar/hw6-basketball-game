@@ -46,7 +46,7 @@
 - Realistic Proportions: All objects sized according to real basketball specifications
 - Camera controls using `OrbitControls` with toggle using the "O" key
 - UI overlay including:
-  - **Score container** (currently static)
+  - **Score container** (currently static) with some CSS styling
   - **Controls container** with user instruction display
 - Responsive Design: Window resize handling that maintains proper aspect ratio
 
@@ -61,7 +61,6 @@
 
 
 ## Known Issues / Limitations
-
 - The basketball is static and cannot be moved or interacted with.
 - The scoreboard is currently static (no gameplay logic or scoring system).
 - The control overlay supports only toggling OrbitControls via the keyboard.

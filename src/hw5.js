@@ -171,6 +171,7 @@ function createSupportStructure(group){
   group.add(arm);
   
 }
+
 function createBasketballHoop(x, y, z, facing){
   const group = new THREE.Group();
   createSupportStructure(group);
@@ -181,7 +182,7 @@ function createBasketballHoop(x, y, z, facing){
     opacity: 0.8,
     side: THREE.DoubleSide
   }));
-  backboard.position.set(0, 3.6, 0.26);
+  backboard.position.set(0, 3.7, 0.26);
   backboard.castShadow = true;
   backboard.receiveShadow = true;
   group.add(backboard);
@@ -189,26 +190,32 @@ function createBasketballHoop(x, y, z, facing){
   // BRANDED BACKBOARD (Bonus): 
   const outline = [
     [-0.9, 0.525], [0.9, 0.525], [0.9, -0.525], [-0.9, -0.525]
-  ].map(([x, y]) => new THREE.Vector3(x, 3.6 + y, 0.3));
+  ].map(([x, y]) => new THREE.Vector3(x, 3.7 + y, 0.3));
   const box = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(outline), new THREE.LineBasicMaterial({ color: 0xffffff }));
   group.add(box);
+
+  const middleRectangle = [
+   [-0.3, 0.2], [0.3, 0.2], [0.3, -0.2], [-0.3, -0.2]
+  ].map(([x, y]) => new THREE.Vector3(x, 3.7 + y, 0.3));
+  const box2 = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(middleRectangle), new THREE.LineBasicMaterial({ color: 0xffffff}));
+  group.add(box2);
   // ---- 
 
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 8, 32), new THREE.MeshPhongMaterial({ color: 0xff6600 }));
-  rim.position.set(0, 3.4, 0.55);
+  rim.position.set(0, 3.4, 0.59);
   rim.rotation.x = degrees_to_radians(90);
   rim.castShadow = true;
   group.add(rim);
 
   const netMat = new THREE.LineBasicMaterial({ color: 0xffffff });
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const p1 = new THREE.Vector3(Math.cos(a) * 0.3, 3.4, Math.sin(a) * 0.3 + 0.55);
-    const p2 = new THREE.Vector3(Math.cos(a) * 0.09, 2.8, Math.sin(a) * 0.09 + 0.55);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    const p1 = new THREE.Vector3(Math.cos(a) * 0.3, 3.4, Math.sin(a) * 0.3 + 0.59);
+    const p2 = new THREE.Vector3(Math.cos(a) * 0.09, 2.8, Math.sin(a) * 0.09 + 0.59);
     const geom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
     group.add(new THREE.Line(geom, netMat));
   }
-
+  
   // APPLY FACING DIRECTION (ROTATION)
   group.rotation.y = {
     right: 0,
