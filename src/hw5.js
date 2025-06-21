@@ -234,17 +234,10 @@ function createBasketballHoop(x, y, z, facing){
   group.add(targetRectangle);
   /// ---
 
-
-  // const middleRectangle = [
-  //  [-0.3, 0.2], [0.3, 0.2], [0.3, -0.2], [-0.3, -0.2]
-  // ].map(([x, y]) => new THREE.Vector3(x, 3.7 + y, 0.3));
-  // const box2 = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(middleRectangle), new THREE.LineBasicMaterial({ color: 0xffffff}));
-  // group.add(box2);
-  // ---- 
-
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 8, 32), new THREE.MeshPhongMaterial({ color: 0xff6600 }));
   rim.position.set(0, 3.4, 0.59);
   rim.rotation.x = degrees_to_radians(90);
+  rim.receiveShadow = true;
   rim.castShadow = true;
   group.add(rim);
 
@@ -305,7 +298,7 @@ function createStaticBasketball(){
     group.add(createSeamRing(angle, true));
   }
 
-  group.position.set(0, 0.35, 0);
+  group.position.set(0, 0.32, 0);
   scene.add(group);
     
 }
