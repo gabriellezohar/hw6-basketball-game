@@ -32,6 +32,55 @@
 				margin: 0;
 				text-shadow: 0 0 3px #FF0000;
 			}
+			#power-container {
+				position: absolute;
+				top: 20px;
+				right: 20px;
+				font-family: Arial, sans-serif;
+				background-color: rgba(0, 0, 0, 0.8);
+				padding: 15px 25px;
+				border-radius: 8px;
+				border: 1px solid white;
+				box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+				min-width: 200px;
+			}
+
+			#power-label {
+				color: white;
+				font-size: 14px;
+				margin-bottom: 8px;
+				text-align: center;
+				font-family: "Orbitron", sans-serif;
+			}
+
+			#power-bar-container {
+				background-color: #333;
+				border: 1px solid #666;
+				border-radius: 10px;
+				height: 20px;
+				overflow: hidden;
+				position: relative;
+			}
+
+			#power-bar {
+				height: 100%;
+				width: 50%;
+				background-color: #ffff00;
+				transition: width 0.1s ease, background-color 0.1s ease;
+				border-radius: 10px;
+			}
+
+			#power-text {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				color: black;
+				font-weight: bold;
+				font-size: 12px;
+				text-shadow: 1px 1px 1px white;
+			}
+			
 			#controls-container {
 				position: absolute;
 				bottom: 20px;
@@ -39,7 +88,7 @@
 				padding: 10px 16px;
 				background-color: rgba(0, 0, 0, 0.6);
 				color: #ffffff;
-				font-family: Arial, sans-serif;
+				font-family: 'Avenir', sans-serif;
 				font-size: 16px;
 				border-radius: 8px;
 				box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
@@ -55,6 +104,16 @@
 				margin: 4px 0;
 				font-size: 14px;
 			}
+			#controls-options{
+				display: flex;
+				flex-wrap: wrap;
+				column-gap: 22px;
+				justify-content: space-evenly;
+				align-items: baseline;
+			}
+		
+		
+						
 						
 		</style>
 		<script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'></script>
@@ -63,13 +122,40 @@
 		<div id="score-container">
 			<p id="score-headline">SCORE:</p>
 			<p id="score-number">0</p>
+		</div>
+		<div id="power-container">
+			<div id="power-label">SHOT POWER</div>
+			<div id="power-bar-container">
+				<div id="power-bar"></div>
+				<div id="power-text">50%</div>
+			</div>
 		</div>			
 		<div id="controls-container">
-			<h3>Controls</h3>
-			<p>O – Toggle orbit camera</p>
+			<h3>🏀 Basketball Game</h3>
+			<div id="controls-options">
+				<div class="control-section">
+					<p><strong>Movement:</strong></p>
+					<p>←  →  ↑  ↓ – Move basketball</p>
+				</div>
+				<div class="control-section">
+					<p><strong class="control-active">Shot Power:</strong></p>
+					<p class="control-active">W – Increase power</p>
+					<p class="control-active">S – Decrease power</p>
+				</div>
+				<div class="control-section">
+					<p class="section-title control-highlight"><strong>Shooting:</strong></p>
+					<p class="control-highlight">SPACE – Shoot ball</p>
+					<p class="control-highlight">R – Reset position</p>
+				</div>
+			
+				<div class="control-section">
+					<p><strong>Camera:</strong></p>
+					<p>O – Toggle orbit camera</p>
+				</div>
+			</div>
 		</div>
 		
-		<script src="src/hw5.js" type="module"></script>
+		<script src="src/hw6.js" type="module"></script>
 
 	</body>
 </html>
