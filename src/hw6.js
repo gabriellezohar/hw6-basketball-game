@@ -1,53 +1,103 @@
 import {OrbitControls} from './OrbitControls.js'
 
+
+// ============================================================================
+// 1. SCENE SETUP & BASIC CONFIGURATION
+// ============================================================================
+
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Basketball movement variables
+
+// Set background and enable shadows
+scene.background = new THREE.Color(0x000000);
+renderer.shadowMap.enabled = true;
+
+// Load textures
+const textureLoader = new THREE.TextureLoader();
+const courtTexture = textureLoader.load("src/court_texture_wood.png");
+courtTexture.wrapS = THREE.RepeatWrapping;
+courtTexture.wrapT = THREE.RepeatWrapping;
+courtTexture.repeat.set(2, 4); // Repeat 4 times along length, 2 times along width
+const basketballTexture = textureLoader.load("src/ball_texture.png");
+
+// Add lights
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(10, 20, 15);
+directionalLight.castShadow = true;
+scene.add(directionalLight);
+
+// Set camera position and controls
+const cameraTranslate = new THREE.Matrix4();
+cameraTranslate.makeTranslation(0, 15, 30);
+camera.applyMatrix4(cameraTranslate);
+const controls = new OrbitControls(camera, renderer.domElement);
+let isOrbitEnabled = true;
+
+// ============================================================================
+// 2. GAME STATE VARIABLES & CONSTANTS
+// ============================================================================
+
+// Basketball object reference
 let basketball = null;
+
+// Physics constants
+const gravity = -9.8; // m/s² (scaled for our scene)
+const scaledGravity = gravity * 0.5; // Adjust for our scene scale 
+const groundY = 0.26; // Basketball resting height
+const bounceRestitution = 0.6; // Energy loss on bounce (60% retained)
+const minimumBounceVelocity = 0.1; // Stop bouncing below this velocity
+const airResistance = 0.98; // Slight air resistance
+const rotationDamping = 0.98; // Rotation air resistance
+const groundRotationFriction = 0.85; // Rotation friction when on ground
+
+// Basketball parameters
 const basketballSpeed = 0.15;
+const rimRadius = 0.3;
+const ballRadius = 0.15;
+
+// Court boundaries
 const courtBounds = {
-    minX: -9.2,    // Left boundary (slightly inside court edge)
-    maxX: 9.2,     // Right boundary  
+    minX: -9.3,    // Left boundary 
+    maxX: 9.3,     // Right boundary  
     minZ: -4.2,    // Back boundary
     maxZ: 4.2      // Front boundary
 };
 
-// Shot power system variables
+// Basketball physics state
+let basketballVelocity = new THREE.Vector3(0, 0, 0);
+let basketballAngularVelocity = new THREE.Vector3(0, 0, 0);
+let basketballRotation = new THREE.Vector3(0, 0, 0);
+let isbasketballFlying = false;
+let maxHeightDuringFlight = 0;
+
+// Shot power system
 let shotPower = 50; // Starting power (50%)
 const minPower = 0;
 const maxPower = 100;
 const powerChangeSpeed = 2; // How fast power changes per frame
 
-// Physics system variables
-const gravity = -9.8; // m/s² (scaled for our scene)
-const scaledGravity = gravity * 0.5; // Adjust for our scene scale 
-let basketballVelocity = new THREE.Vector3(0, 0, 0);
-let isbasketballFlying = false;
-let basketballRotation = new THREE.Vector3(0, 0, 0);
 
-// Court physics constants
-const groundY = 0.32; // Basketball resting height
-const bounceRestitution = 0.6; // Energy loss on bounce (60% retained)
-const minimumBounceVelocity = 0.1; // Stop bouncing below this velocity
-const airResistance = 0.98; // Slight air resistance
+// Game scoring system
+let gameScore = {
+    totalScore: 0,
+    shotAttempts: 0,
+    shotsMade: 0,
+    shootingPercentage: 0
+};
 
-// Enhanced collision detection parameters
-const rimRadius = 0.3; // Basketball hoop rim radius
-const basketballRadius = 0.2; // Basketball radius
+// Game state tracking
+let shotInProgress = false;
+let collisionAlreadyDetected = false;
+let feedbackTimeout = null;
+let shotResultDetected = false; 
 
-let maxHeightDuringFlight = 0;
-
-let basketballAngularVelocity = new THREE.Vector3(0, 0, 0);
-const rotationDamping = 0.98; // Rotation air resistance
-const groundRotationFriction = 0.85; // Rotation friction when on ground
-
-
-// Hoop positions for targeting
+// Hoop positions 
 const hoops = [
     { 
         position: new THREE.Vector3(-10, 3.4, 0), 
@@ -64,7 +114,7 @@ const hoops = [
 ];
 
 
-// Update the keys object to include W and S
+// Input handling
 const keys = {
     ArrowLeft: false,
     ArrowRight: false,
@@ -76,149 +126,43 @@ const keys = {
     KeyR: false
 };
 
-// Set background color
-scene.background = new THREE.Color(0x000000);
-
-// Load textures at the top of your code (after scene setup)
-const textureLoader = new THREE.TextureLoader();
-
-// Court texture (wood flooring image)
-const courtTexture = textureLoader.load("src/court_texture_wood.png");
-courtTexture.wrapS = THREE.RepeatWrapping;
-courtTexture.wrapT = THREE.RepeatWrapping;
-courtTexture.repeat.set(2, 4); // Repeat 4 times along length, 2 times along width
-
-// Basketball texture  
-const basketballTexture = textureLoader.load("src/ball_texture.png");
-
-// Add lights to the scene
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-scene.add(ambientLight);
-
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(10, 20, 15);
-scene.add(directionalLight);
-
-// Enable shadows
-renderer.shadowMap.enabled = true;
-directionalLight.castShadow = true;
+// ============================================================================
+// 3. UTILITY FUNCTIONS
+// ============================================================================
 
 function degrees_to_radians(degrees) {
   var pi = Math.PI;
   return degrees * (pi/180);
 }
-
-// Create basketball court
-function createBasketballCourt() {
-  // Court floor - just a simple brown surface
-  const courtGeometry = new THREE.BoxGeometry(20, 0.2, 10);
-  // const courtMaterial = new THREE.MeshPhongMaterial({ 
-  //   color: 0xc68642,  // Brown wood color
-  //   shininess: 50
-  // });
-  const courtMaterial = new THREE.MeshPhongMaterial({ 
-    map: courtTexture,  // Apply the image texture
-    shininess: 50
-  });
-  const court = new THREE.Mesh(courtGeometry, courtMaterial);
-  court.receiveShadow = true;
-  scene.add(court);
-  
-  // Note: All court lines, hoops, and other elements have been removed
-  // Students will need to implement these features
-  
-  // ADDING COURT LINES HERE:
-  createCourtLines();
-
-  // ADDING BASKETBALL HOOPS:
-  createBasketballHoop(-10, 0, 0, 'backward'); // left hook 
-  createBasketballHoop(10, 0, 0, 'forward'); // right hook 
-
-  // ADDING STATIC BASKETBALL 
-  createInteractiveBasketball();
-
+// Physics calculation functions
+function calculateDistanceToHoop(ballPos, hoopPos) {
+    const dx = hoopPos.x - ballPos.x;
+    const dz = hoopPos.z - ballPos.z;
+    return Math.sqrt(dx * dx + dz * dz);
 }
 
-// === DETAILED MARKINGS (KEY AREAS + FREE THROW CIRCLES) ===
-function createDetailedCourtMarkings(){
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-  
-  const createRectangle = (points) => {
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    return new THREE.LineLoop(geometry, lineMaterial);
-  };
 
-  const createCircle = (x, z , start, end ) => {
-    const curve = new THREE.EllipseCurve(x, z, 1, 1, start, end);
-    const points = curve.getPoints(64).map(p => new THREE.Vector3(p.x, 0.11, p.y));
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    return new THREE.Line(geometry, lineMaterial);
-  };
-
-  const createDashedCircle = (x, z, start, end) => {
-    const dashedLineMaterial = new THREE.LineDashedMaterial({ 
-    color: 0xffffff,
-    dashSize: 0.2,     
-    gapSize: 0.1       
-    });
-    const curve = new THREE.EllipseCurve(x, z, 1, 1, start, end);
-    const points = curve.getPoints(64).map(p => new THREE.Vector3(p.x, 0.11, p.y));
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+function findNearestHoop() {
+    if (!basketball) return hoops[0];
     
-    const dashedCircle = new THREE.Line(geometry, dashedLineMaterial);
-    dashedCircle.computeLineDistances(); 
-    return dashedCircle;
-  };
-
-  // LEFT SIDE (Key Area + Free Throw Circle)
-  scene.add(createRectangle([
-    new THREE.Vector3(-10, 0.11, -1.5), new THREE.Vector3(-6.2, 0.11, -1.5),
-    new THREE.Vector3(-6.2, 0.11, 1.5), new THREE.Vector3(-10, 0.11, 1.5)
-  ]));
-  scene.add(createCircle(-6, 0,-Math.PI / 2,  Math.PI / 2 ));
-  scene.add(createDashedCircle(-6,0,Math.PI / 2 , 3* Math.PI / 2 ));
-
-  // RIGHT SIDE (Key Area + Free Throw Circle)
-  scene.add(createRectangle([
-    new THREE.Vector3(10, 0.11, -1.5), new THREE.Vector3(6.2, 0.11, -1.5),
-    new THREE.Vector3(6.2, 0.11, 1.5), new THREE.Vector3(10, 0.11, 1.5)
-  ]));
-  scene.add(createCircle(6, 0, Math.PI / 2 , 3* Math.PI / 2  ));
-  scene.add(createDashedCircle(6, 0,-Math.PI / 2,  Math.PI / 2  ));
-  
+    let nearestHoop = hoops[0];
+    let minDistance = calculateDistanceToHoop(basketball.position, hoops[0].position);
+        
+    for (let i = 1; i < hoops.length; i++) {
+        const distance = calculateDistanceToHoop(basketball.position, hoops[i].position);
+        if (distance < minDistance) {
+            minDistance = distance;
+            nearestHoop = hoops[i];
+        }
+    }
+    return nearestHoop;
 }
 
-// === COURT LINES (CENTER, CIRCLES, THREE-POINTS) ===
-function createCourtLines(){
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-    
-    // CENTER LINE 
-    const centerLine = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0.11, -5), new THREE.Vector3(0, 0.11, 5)
-      ]);
-    scene.add(new THREE.Line(centerLine, lineMaterial));
+// ============================================================================
+// 4. SCENE CREATION FUNCTIONS
+// ============================================================================
 
-    const addEllipse = (x, z, rx, rz, start, end) => {
-      const curve = new THREE.EllipseCurve(x, z, rx, rz, start, end);
-      const points = curve.getPoints(50).map(p => new THREE.Vector3(p.x, 0.11, p.y));
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      scene.add(new THREE.Line(geometry, lineMaterial));
-    };
-
-    // LEFT THREE-POINT LINE
-    addEllipse(-10, 0, 5.33, 4.2, -Math.PI / 2, Math.PI / 2);
-
-    // RIGHT THREE-POINT LINE
-    addEllipse(10, 0, 5.33, 4.2, Math.PI / 2, 3 * Math.PI / 2);
-
-    // CENTER CIRCLE 
-    addEllipse(0, 0, 1, 1, 0, 2 * Math.PI);
-
-    // ADD THE NEW DETAILED MARKINGS (Bonus)
-    createDetailedCourtMarkings();  
-}
-
-// === BASKETBALL HOOP STRUCTURE ===
+// Basketball hoop structure 
 function createSupportStructure(group){
   const poleMat = new THREE.MeshPhongMaterial({ color: 0x464646 });
 
@@ -335,9 +279,87 @@ function createBasketballHoop(x, y, z, facing){
   
 }
 
-// === BASKETBALL OBJECT ===
+// The court markings and lines
+function createDetailedCourtMarkings(){
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+  
+  const createRectangle = (points) => {
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    return new THREE.LineLoop(geometry, lineMaterial);
+  };
+
+  const createCircle = (x, z , start, end ) => {
+    const curve = new THREE.EllipseCurve(x, z, 1, 1, start, end);
+    const points = curve.getPoints(64).map(p => new THREE.Vector3(p.x, 0.11, p.y));
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    return new THREE.Line(geometry, lineMaterial);
+  };
+
+  const createDashedCircle = (x, z, start, end) => {
+    const dashedLineMaterial = new THREE.LineDashedMaterial({ 
+    color: 0xffffff,
+    dashSize: 0.2,     
+    gapSize: 0.1       
+    });
+    const curve = new THREE.EllipseCurve(x, z, 1, 1, start, end);
+    const points = curve.getPoints(64).map(p => new THREE.Vector3(p.x, 0.11, p.y));
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    
+    const dashedCircle = new THREE.Line(geometry, dashedLineMaterial);
+    dashedCircle.computeLineDistances(); 
+    return dashedCircle;
+  };
+
+  // LEFT SIDE (Key Area + Free Throw Circle)
+  scene.add(createRectangle([
+    new THREE.Vector3(-10, 0.11, -1.5), new THREE.Vector3(-6.2, 0.11, -1.5),
+    new THREE.Vector3(-6.2, 0.11, 1.5), new THREE.Vector3(-10, 0.11, 1.5)
+  ]));
+  scene.add(createCircle(-6, 0,-Math.PI / 2,  Math.PI / 2 ));
+  scene.add(createDashedCircle(-6,0,Math.PI / 2 , 3* Math.PI / 2 ));
+
+  // RIGHT SIDE (Key Area + Free Throw Circle)
+  scene.add(createRectangle([
+    new THREE.Vector3(10, 0.11, -1.5), new THREE.Vector3(6.2, 0.11, -1.5),
+    new THREE.Vector3(6.2, 0.11, 1.5), new THREE.Vector3(10, 0.11, 1.5)
+  ]));
+  scene.add(createCircle(6, 0, Math.PI / 2 , 3* Math.PI / 2  ));
+  scene.add(createDashedCircle(6, 0,-Math.PI / 2,  Math.PI / 2  ));
+  
+}
+
+function createCourtLines(){
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+    
+    // CENTER LINE 
+    const centerLine = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.11, -5), new THREE.Vector3(0, 0.11, 5)
+      ]);
+    scene.add(new THREE.Line(centerLine, lineMaterial));
+
+    const addEllipse = (x, z, rx, rz, start, end) => {
+      const curve = new THREE.EllipseCurve(x, z, rx, rz, start, end);
+      const points = curve.getPoints(50).map(p => new THREE.Vector3(p.x, 0.11, p.y));
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      scene.add(new THREE.Line(geometry, lineMaterial));
+    };
+
+    // LEFT THREE-POINT LINE
+    addEllipse(-10, 0, 5.33, 4.2, -Math.PI / 2, Math.PI / 2);
+
+    // RIGHT THREE-POINT LINE
+    addEllipse(10, 0, 5.33, 4.2, Math.PI / 2, 3 * Math.PI / 2);
+
+    // CENTER CIRCLE 
+    addEllipse(0, 0, 1, 1, 0, 2 * Math.PI);
+
+    // ADD THE NEW DETAILED MARKINGS (Bonus)
+    createDetailedCourtMarkings();  
+}
+
+// Basketball object 
 function createSeamRing(angleOffset = 0, isVertical = true) {
-  const points = [], segments = 128, r = 0.201; 
+  const points = [], segments = 128, r = 0.151; 
   for (let i = 0; i <= segments; i++) {
     const t = (i / segments) * Math.PI * 2;
     const x = isVertical ? Math.sin(t) * Math.cos(angleOffset) * r : Math.cos(t) * r;
@@ -355,7 +377,7 @@ function createInteractiveBasketball() {
     const group = new THREE.Group();
 
     const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(0.2, 32, 32), 
+        new THREE.SphereGeometry(0.15, 32, 32), 
         new THREE.MeshPhongMaterial({ 
             map: basketballTexture,
             shininess: 30 
@@ -374,7 +396,7 @@ function createInteractiveBasketball() {
     }
 
     // Starting position at center court
-    group.position.set(0, 0.32, 0);
+    group.position.set(0, 0.26, 0);
     
     // Store reference to the basketball group
     basketball = group;
@@ -383,84 +405,88 @@ function createInteractiveBasketball() {
     return group;
 }
 
+// Create basketball court
+function createBasketballCourt() {
+  // Court floor - just a simple brown surface
+  const courtGeometry = new THREE.BoxGeometry(20, 0.2, 10);
+  const courtMaterial = new THREE.MeshPhongMaterial({ 
+    map: courtTexture,  // Apply the image texture
+    shininess: 50
+  });
+  const court = new THREE.Mesh(courtGeometry, courtMaterial);
+  court.receiveShadow = true;
+  scene.add(court);
+  
+  // Note: All court lines, hoops, and other elements have been removed
+  // Students will need to implement these features
+  
+  createCourtLines();
+  createBasketballHoop(-10, 0, 0, 'backward'); // left hook 
+  createBasketballHoop(10, 0, 0, 'forward'); // right hook 
+  createInteractiveBasketball();
 
-
-// Create all elements
-createBasketballCourt();
-
-// Set camera position for better view
-const cameraTranslate = new THREE.Matrix4();
-cameraTranslate.makeTranslation(0, 15, 30);
-camera.applyMatrix4(cameraTranslate);
-
-// Orbit controls
-const controls = new OrbitControls(camera, renderer.domElement);
-let isOrbitEnabled = true;
-
-
-// Update shot power based on W/S keys
-function updateShotPower() {
-    if (isbasketballFlying) return; // Don't change power while ball is flying
-    
-    if (keys.KeyW) {
-        shotPower = Math.min(maxPower, shotPower + powerChangeSpeed);
-    }
-    if (keys.KeyS) {
-        shotPower = Math.max(minPower, shotPower - powerChangeSpeed);
-    }
-    
-    
-    // Update the power display in the UI
-    updatePowerDisplay();
-}
-// Update power display in HTML
-function updatePowerDisplay() {
-    const powerBar = document.getElementById('power-bar');
-    const powerText = document.getElementById('power-text');
-    
-    if (powerBar && powerText) {
-        // Update power bar width
-        powerBar.style.width = shotPower + '%';
-        
-        // Update power text
-        powerText.textContent = Math.round(shotPower) + '%';
-        
-        // Change color based on power level
-        if (shotPower < 30) {
-            powerBar.style.backgroundColor = '#00ff00'; // Green (low power)
-        } else if (shotPower < 70) {
-            powerBar.style.backgroundColor = '#ffff00'; // Yellow (medium power)
-        } else {
-            powerBar.style.backgroundColor = '#ff0000'; // Red (high power)
-        }
-    }
 }
 
-// Physics calculation functions
-function calculateDistanceToHoop(ballPos, hoopPos) {
-    const dx = hoopPos.x - ballPos.x;
-    const dz = hoopPos.z - ballPos.z;
-    return Math.sqrt(dx * dx + dz * dz);
+// ============================================================================
+// 5. INPUT HANDLING SYSTEM
+// ============================================================================
+
+function handleKeyDown(e) {
+  if (e.key === "o") {
+    isOrbitEnabled = !isOrbitEnabled;
+    return;
+  }
+   // Handle special keys
+  if (e.code === "Space") {
+    shootBasketball();
+    e.preventDefault();
+    return;
+  }
+    
+  if (e.code === "KeyR") {
+    resetBasketball();
+    e.preventDefault();
+    return;
+  }
+  
+  if (e.code === "KeyG") {
+    resetGameStats();
+    e.preventDefault();
+    return;
+  }
+  
+  // Basketball movement controls
+  if (keys.hasOwnProperty(e.code)) {
+    keys[e.code] = true;
+    e.preventDefault(); // Prevent page scrolling
+  }
+  
 }
 
-
-function findNearestHoop() {
-    if (!basketball) return hoops[0];
-    
-    let nearestHoop = hoops[0];
-    let minDistance = calculateDistanceToHoop(basketball.position, hoops[0].position);
-        
-    for (let i = 1; i < hoops.length; i++) {
-        const distance = calculateDistanceToHoop(basketball.position, hoops[i].position);
-        if (distance < minDistance) {
-            minDistance = distance;
-            nearestHoop = hoops[i];
-        }
-    }
-    
-    return nearestHoop;
+function handleKeyUp(e) {
+  // Basketball movement controls
+  if (keys.hasOwnProperty(e.code)) {
+    keys[e.code] = false;
+    e.preventDefault(); // Prevent page scrolling
+  }
 }
 
+function handleWindowResize() {
+  // Update camera aspect ratio to match new window size
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  
+  // Update renderer canvas size
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+document.addEventListener('keydown', handleKeyDown);
+document.addEventListener('keyup', handleKeyUp);
+window.addEventListener('resize', handleWindowResize);
+
+// ============================================================================
+// 6. PHYSICS SYSTEM
+// ============================================================================
 function calculateShotTrajectory(targetHoop) {
     if (!basketball) return new THREE.Vector3(0, 0, 0);
     
@@ -471,25 +497,15 @@ function calculateShotTrajectory(targetHoop) {
     const dx = hoopPos.x - ballPos.x;
     const dz = hoopPos.z - ballPos.z;
     const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
-    // *** הוסיפי את זה לבדיקה: ***
-    console.log("=== DIRECTION DEBUG ===");
-    console.log("Ball position:", ballPos.x.toFixed(2), ballPos.z.toFixed(2));
-    console.log("Hoop position:", hoopPos.x.toFixed(2), hoopPos.z.toFixed(2));
-    console.log("dx (X direction):", dx.toFixed(2));
-    console.log("dz (Z direction):", dz.toFixed(2));
-    console.log("Target hoop:", targetHoop.name);
-    console.log("===================");
+   
     
     const powerFactor = shotPower / 100;
-    const maxPower = 20; // כוח מקסימלי
+    const maxPower = 20; // maximal power
     const actualPower = maxPower * powerFactor;
 
-    // Calculate shot angle based on distance (higher arc for longer shots)
-    // const baseAngle = 45; // degrees // 
-    // const angleFactor = Math.min(horizontalDistance / 15, 1); // Scale based on distance
-    // const shotAngle = (baseAngle + angleFactor * 15) * Math.PI / 180; // Convert to radians
-    const minAngle = 40; // מעלות
-    const maxAngle = 65; // מעלות
+    
+    const minAngle = 40; // degrees
+    const maxAngle = 65; // degrees
     const shotAngle = (maxAngle - (powerFactor * (maxAngle - minAngle))) * Math.PI / 180;
 
     // Calculate velocity components
@@ -506,57 +522,129 @@ function calculateShotTrajectory(targetHoop) {
     );
 }
 
-// Basketball physics update
-function updateBasketballPhysics(deltaTime) {
-    if (!basketball || !isbasketballFlying) return;
+function updateFlightRotation(deltaTime) {
+    const velocityMagnitude = basketballVelocity.length();
     
-    // Apply gravity
-    basketballVelocity.y += scaledGravity * deltaTime;
-    
-    // Apply air resistance
-    basketballVelocity.multiplyScalar(airResistance);
-    
-    // Update position
-    const movement = basketballVelocity.clone().multiplyScalar(deltaTime);
-    basketball.position.add(movement);
-    
-    // Update basketball rotation based on velocity
-    if (basketballVelocity.length() > 0.1) {
-        const rotationSpeed = basketballVelocity.length() * 2;
-        basketballRotation.x += rotationSpeed * deltaTime;
-        basketballRotation.z += rotationSpeed * deltaTime * 0.5;
-        basketball.rotation.x = basketballRotation.x;
-        basketball.rotation.z = basketballRotation.z;
+    if (velocityMagnitude > 0.1) {
+        const horizontalVel = new THREE.Vector2(basketballVelocity.x, basketballVelocity.z);
+        const horizontalSpeed = horizontalVel.length();
+        
+        if (horizontalSpeed > 0.1) {
+            const normalizedHorizontal = horizontalVel.normalize();
+            
+            basketballAngularVelocity.x = -basketballVelocity.z * 8;
+            basketballAngularVelocity.z = basketballVelocity.x * 8;
+            basketballAngularVelocity.y += (normalizedHorizontal.x * normalizedHorizontal.y) * 2;
+        }
+        
+        // Apply air resistance to rotation
+        basketballAngularVelocity.multiplyScalar(rotationDamping);
+        
+        basketball.rotation.x += basketballAngularVelocity.x * deltaTime;
+        basketball.rotation.y += basketballAngularVelocity.y * deltaTime;
+        basketball.rotation.z += basketballAngularVelocity.z * deltaTime;
     }
-    
-    // Enhanced collision detection system
-    maxHeightDuringFlight = Math.max(maxHeightDuringFlight, basketball.position.y);
-
-    // checkBackboardCollision();
-    checkRimCollision(); // NEW: Check rim collisions first
-    handleGroundCollision(); // IMPROVED: Better ground collision
-    handleCourtBoundaryCollision(); // IMPROVED: Better boundary collision
-    
 }
 
-// Basic hoop collision detection
-// function checkHoopCollision() {
-//     for (const hoop of hoops) {
-//         const distance = calculateDistanceToHoop(basketball.position, hoop.position);
-//         const heightDiff = Math.abs(basketball.position.y - hoop.position.y);
+function updateMovementRotation(deltaX, deltaZ) {
+    const movementSpeed = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+    const rotationSpeed = movementSpeed * 8; 
+    
+    // Calculate rotation axis based on movement direction
+    
+    if (Math.abs(deltaZ) > Math.abs(deltaX)) {
+        // Primary movement is forward/backward
+        basketballAngularVelocity.x = deltaZ > 0 ? rotationSpeed : -rotationSpeed;
+        basketballAngularVelocity.z *= 0.8; 
+    } else {
+        // Primary movement is left/right
+        basketballAngularVelocity.z = deltaX > 0 ? -rotationSpeed : rotationSpeed;
+        basketballAngularVelocity.x *= 0.8; 
+    }
+    
+    // Diagonal movement combines both rotations
+    if (Math.abs(deltaX) > 0 && Math.abs(deltaZ) > 0) {
+        basketballAngularVelocity.x = deltaZ > 0 ? rotationSpeed * 0.7 : -rotationSpeed * 0.7;
+        basketballAngularVelocity.z = deltaX > 0 ? -rotationSpeed * 0.7 : rotationSpeed * 0.7;
+    }
+}
+
+function handleRealisticRimCollision(hoop) {
+    const rimPos = hoop.rimCenter;
+    const ballPos = basketball.position.clone();
+    
+    const dx = ballPos.x - rimPos.x;
+    const dz = ballPos.z - rimPos.z;
+    const dy = ballPos.y - rimPos.y;
+
+    const distance = Math.sqrt(dx*dx + dz*dz);
+    
+    const minDistance = rimRadius + ballRadius + 0.02;
+    
+    // Handle top collision
+    if (ballPos.y > rimPos.y + 0.05 && basketballVelocity.y < 0) {        
+        basketball.position.y = rimPos.y + 0.25;
+        basketballVelocity.y = Math.abs(basketballVelocity.y) * 0.4; // הפיכה למעלה עם אובדן אנרגיה
         
-//         // Check if ball is near hoop and moving downward
-//         if (distance < 0.3 && heightDiff < 0.2 && basketballVelocity.y < 0) {
-//             console.log(`Ball passed through ${hoop.name} hoop!`); // For testing
-//             // Future: Update score here
-//         }
-//     }
-// }
+        let normalX = dx / distance;
+        let normalZ = dz / distance;
+        
+        if (distance < 0.1) {
+            const randomAngle = Math.random() * 2 * Math.PI;
+            normalX = Math.cos(randomAngle);
+            normalZ = Math.sin(randomAngle);
+        }
+        
+        const pushForce = 0.3;
+        basketballVelocity.x = normalX * pushForce;
+        basketballVelocity.z = normalZ * pushForce;
+        
+        basketballAngularVelocity.x += (Math.random() - 0.5) * 8;
+        basketballAngularVelocity.y += (Math.random() - 0.5) * 4;
+        basketballAngularVelocity.z += (Math.random() - 0.5) * 8;
+        
+        return; 
+    }
+    
+    // Handle side/bottom collision
+    let normalX = dx / distance;
+    let normalZ = dz / distance;
+    
+    if (distance < minDistance ) {
+        normalX = dx / distance;
+        normalZ = dz / distance;
+        
+        basketball.position.x = rimPos.x + normalX * minDistance;
+        basketball.position.z = rimPos.z + normalZ * minDistance;
 
+        if (ballPos.y < rimPos.y - 0.15) {
+            basketball.position.y = rimPos.y - 0.15;
+        }        
+    }
+  
 
-// Enhanced rim collision detection
+    const velocityTowardsRim = basketballVelocity.x * normalX + basketballVelocity.z * normalZ;
+
+    if (velocityTowardsRim < 0) {
+        basketballVelocity.x -= 2 * velocityTowardsRim * normalX;
+        basketballVelocity.z -= 2 * velocityTowardsRim * normalZ;
+
+        if (ballPos.y <= rimPos.y && basketballVelocity.y < 0) {
+            basketballVelocity.y *= -0.2;
+        } else {
+            basketballVelocity.y = Math.abs(basketballVelocity.y) * 0.3;
+        }
+
+        basketballVelocity.multiplyScalar(0.4);
+    }
+    
+    basketballAngularVelocity.x += (Math.random() - 0.5) * 6;
+    basketballAngularVelocity.y += (Math.random() - 0.5) * 4;
+    basketballAngularVelocity.z += (Math.random() - 0.5) * 6;
+}
+
 function checkRimCollision() {
-    if (!basketball || !isbasketballFlying) return;
+    if (!basketball || !isbasketballFlying || collisionAlreadyDetected) return; // 🔥 עצור אם כבר זוהה
     
     const ballPos = basketball.position.clone();
     
@@ -564,174 +652,81 @@ function checkRimCollision() {
     for (const hoop of hoops) {
         const rimPos = hoop.rimCenter;
         
-        // חישוב מרחק תלת מימדי לרים
         const dx = ballPos.x - rimPos.x;
         const dy = ballPos.y - rimPos.y;
         const dz = ballPos.z - rimPos.z;
         const horizontalDistance = Math.sqrt(dx*dx + dz*dz);
         
+        if (horizontalDistance > 2.0 || Math.abs(dy) > 1.5) {
+          hoop.hasScored = false; 
+        }
 
-        if (!hoop.hasScored && horizontalDistance <= 1.08 &&
-            ballPos.y < rimPos.y + 0.8 && 
-            ballPos.y > rimPos.y - 0.8 &&
-            basketballVelocity.y < -0.2) {
+        // ZONE 1: Rim collision (miss)
+        if (!hoop.hasScored && horizontalDistance >= 0.87 &&
+            horizontalDistance < 1.1 &&
+            Math.abs(dy) <= 0.3) {
+
+              collisionAlreadyDetected = true; 
+              handleRealisticRimCollision(hoop);
+              hoop.hasScored = false;
+              shotResultDetected = true;
+              detectMiss();
+            return;
+        }
+
+        // ZONE 2: Ball scored (went down through hoop)
+        if (!hoop.hasScored &&
+            horizontalDistance < 0.87 &&
+            ballPos.y < rimPos.y + 0.2 &&
+            ballPos.y > rimPos.y - 0.15 &&   
+            basketballVelocity.y < -0.05) {
             
-            console.log(`basket pos y  : ${basketball.position.y}`);
-            console.log(`rim pos y  : ${rimPos.y}`);
+            if( horizontalDistance >= 0.8 && Math.abs(dy) <= 0.3){
 
+            }
             hoop.hasScored = true;
-            console.log(`🏀 SCORE! Ball went through ${hoop.name} hoop!`);
-            // כאן תוסיפי ניקוד בעתיד
+            collisionAlreadyDetected = true; 
+            detectScore(2);
             return;
-        }
-        // בדיקה אם הכדור קרוב לרים
-        // בדיקת התנגשות עם הרים (רק החלק הפנימי והעליון)
-        if (horizontalDistance > 1.08 &&
-            horizontalDistance < 1.1  &&  
-            Math.abs(dy) <= 0.5 ) {
-            console.log(`dx : ${dx}`);
-
-            console.log(`💥 Ball hit the rim of ${hoop.name} hoop!`);
-            handleSimpleRimCollision(hoop);
-            hoop.hasScored = false;
-            return;
-        }
+          }
         return;
     }
 }
 
-function handleSimpleRimCollision(hoop) {
-    const rimPos = hoop.rimCenter;
-    const ballPos = basketball.position.clone();
-    
-    // חישוב כיוון הדחיפה
-    const dx = ballPos.x - rimPos.x;
-    const dz = ballPos.z - rimPos.z;
-    const distance = Math.sqrt(dx*dx + dz*dz);
-    
-    // נרמול הכיוון
-    const normalX = dx / distance;
-    const normalZ = dz / distance;
-    
-    // הדחיפה החוצה מהרים
-    const bounceForce = 0.6;
-    basketballVelocity.x = normalX * bounceForce;
-    basketballVelocity.z = normalZ * bounceForce;
-    basketballVelocity.y = Math.abs(basketballVelocity.y) * 0.3; // קפיצה קלה למעלה
-    
-    console.log(`🏀 Ball bounced: X=${basketballVelocity.x.toFixed(2)}, Z=${basketballVelocity.z.toFixed(2)}`);
-}
-
-// Handle rim collision physics
-function handleRimCollision(hoop) {
-    const ballPos = basketball.position;
-    const rimPos = hoop.rimCenter;
-
-    const dx = ballPos.x - rimPos.x;
-    const dz = ballPos.z - rimPos.z;
-    const horizontalDist = Math.sqrt(dx * dx + dz * dz);
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    const minDist = rimRadius + basketballRadius;
-
-    const penetration = minDist - dist;
-    if (penetration > 0) {
-        const normal = new THREE.Vector3(dx, 0, dz).normalize();
-
-        // הזזה קטנה לאחור לפי כיוון התנועה (כמו קרן שמגיעה מהעבר)
-        const backward = basketballVelocity.clone().normalize().multiplyScalar(0.03);
-        basketball.position.sub(backward);
-
-        // תיקון מיקום החוצה מה־rim
-        const correction = normal.clone().multiplyScalar(penetration + 0.005);
-        basketball.position.add(correction);
-
-        // החזרת מהירות לפי הנורמל (כמו קיר עגול)
-        const velocityDot = basketballVelocity.x * normal.x + basketballVelocity.z * normal.z;
-        if (velocityDot > 0) {
-            basketballVelocity.x -= 2 * velocityDot * normal.x;
-            basketballVelocity.z -= 2 * velocityDot * normal.z;
-            basketballVelocity.multiplyScalar(0.8); // איבוד אנרגיה
-        }
-
-        console.log("💥 Rim collision with", hoop.name);
-    }
-}
-
-function checkBackboardCollision() {
-    if (!basketball || !isbasketballFlying) return;
-
-    const ballPos = basketball.position.clone();
-
-    for (const hoop of hoops) {
-        // קביעת מיקום הלוח
-        let backboardX = hoop.name === "left" ? -10.4 : 10.4;
-        const backboardZ = 0;
-
-        // תנאי התנגשות
-        const distanceToBackboard = Math.abs(ballPos.x - backboardX);
-        const heightOk = (ballPos.y + basketballRadius) >= 3.2 && (ballPos.y - basketballRadius) <= 4.25;
-        const widthOk = Math.abs(ballPos.z - backboardZ) <= 0.525;
-
-        if (distanceToBackboard <= 0.42 && heightOk && widthOk) {
-            console.log(`💥 Backboard collision with ${hoop.name} hoop!`);
-
-            // שינוי מהירות
-            basketballVelocity.x = -basketballVelocity.x * 0.4;
-            basketballVelocity.y *= 0.8;
-            basketballVelocity.z *= 0.8;
-
-            const wallX = isLeftHoop ? backboardX : backboardX;
-            const ballEdgeX = isLeftHoop
-                ? basketball.position.x + basketballRadius
-                : basketball.position.x - basketballRadius;
-
-            // התנגשות רק אם באמת חודר פנימה (edge של הכדור נכנס אל הלוח)
-            const penetrated = isLeftHoop
-                ? ballEdgeX >= wallX
-                : ballEdgeX <= wallX;
-
-            if (penetrated) {
-                // הופכים את מהירות X ומנחיתים
-                basketballVelocity.x = -basketballVelocity.x * 0.4;
-                basketballVelocity.y *= 0.8;
-                basketballVelocity.z *= 0.8;
-
-                // מצמידים את הכדור בדיוק לקצה הלוח (בלי לחדור בכלל)
-                basketball.position.x = isLeftHoop
-                    ? wallX - basketballRadius
-                    : wallX + basketballRadius;
-            }
-            return;
-        }
-    }
-}
-
-
-// Enhanced ground collision with better parameters
 function handleGroundCollision() {
     if (basketball.position.y <= groundY && basketballVelocity.y < 0) {
         basketball.position.y = groundY;
         
-        // Improved bounce physics
         basketballVelocity.y = -basketballVelocity.y * bounceRestitution;
-        basketballVelocity.x *= 0.85; // Slightly less horizontal velocity loss
+        basketballVelocity.x *= 0.85; 
         basketballVelocity.z *= 0.85;
-        
-        // Add some randomness to bounce for realism
-        const randomFactor = 0.95 + Math.random() * 0.1; // 0.95 to 1.05
+
+        const spinEffect = 0.1;
+        basketballVelocity.x += basketballAngularVelocity.z * spinEffect;
+        basketballVelocity.z -= basketballAngularVelocity.x * spinEffect;
+        basketballAngularVelocity.multiplyScalar(0.7);
+
+        const randomFactor = 0.95 + Math.random() * 0.1; 
         basketballVelocity.multiplyScalar(randomFactor);
         
-        // Stop bouncing if velocity is too low
         if (Math.abs(basketballVelocity.y) < minimumBounceVelocity) {
             basketballVelocity.set(0, 0, 0);
             isbasketballFlying = false;
-            basketballRotation.set(0, 0, 0);
-            console.log("Basketball came to rest on ground");
+
+            if (shotInProgress && !collisionAlreadyDetected) {
+                const hadScore = hoops.some(h => h.hasScored);
+                
+                if (!hadScore) {
+                    collisionAlreadyDetected = true;
+                    detectMiss();
+                }
+            }
+            
+            shotInProgress = false;
         }
     }
 }
 
-// Enhanced court boundary collision
 function handleCourtBoundaryCollision() {
     let collisionOccurred = false;
     
@@ -754,39 +749,197 @@ function handleCourtBoundaryCollision() {
     }
 }
 
+function updateBasketballPhysics(deltaTime) {
+    if (!basketball || !isbasketballFlying) return;
+    
+    // Apply gravity
+    basketballVelocity.y += scaledGravity * deltaTime;
+    
+    // Apply air resistance
+    basketballVelocity.multiplyScalar(airResistance);
+    
+    // Update position
+    const movement = basketballVelocity.clone().multiplyScalar(deltaTime);
+    basketball.position.add(movement);
+    
+    // Enhanced flight rotation 
+    updateFlightRotation(deltaTime);
 
-// Shooting function
+    // Enhanced collision detection system
+    maxHeightDuringFlight = Math.max(maxHeightDuringFlight, basketball.position.y);
+
+    checkRimCollision(); 
+    handleGroundCollision(); 
+    handleCourtBoundaryCollision(); 
+    
+}
+
+
+// ============================================================================
+// 7. GAME LOGIC & SCORING SYSTEM
+// ============================================================================
+
+function detectScore(points = 2) {
+    gameScore.totalScore += points;
+    gameScore.shotsMade++;
+    gameScore.shotAttempts++;
+
+    if (gameScore.shotAttempts > 0) {
+      gameScore.shootingPercentage = Math.round((gameScore.shotsMade / gameScore.shotAttempts) * 100);
+    } else {
+      gameScore.shootingPercentage = 0;
+    }    
+    showShotFeedback("SHOT MADE!", false);
+    updateScoreDisplay();
+
+    shotInProgress = false;
+    collisionAlreadyDetected = true; 
+
+    console.log(`🏀 SHOT MADE! Total Score: ${gameScore.totalScore}`);
+}
+
+function detectMiss() {
+    gameScore.shotAttempts++;
+    if (gameScore.shotAttempts > 0) {
+      gameScore.shootingPercentage = Math.round((gameScore.shotsMade / gameScore.shotAttempts) * 100);
+    } else {
+      gameScore.shootingPercentage = 0;
+    }    
+    showShotFeedback("MISSED SHOT", true);
+    updateScoreDisplay();
+    shotInProgress = false;
+    collisionAlreadyDetected = true;
+
+    console.log(`💔 MISSED SHOT! Total Score: ${gameScore.totalScore}`);
+}
+
+function resetGameStats() {
+    gameScore = {
+        totalScore: 0,
+        shotAttempts: 0,
+        shotsMade: 0,
+        shootingPercentage: 0
+    };
+    
+    updateScoreDisplay();
+    
+    const feedback = document.getElementById('shot-feedback');
+    if (feedback) {
+        feedback.className = 'shot-feedback';
+    }
+    
+    console.log("Game statistics reset!");
+}
+
 function shootBasketball() {
-    if (isbasketballFlying) return; // Don't shoot if ball is already flying
-    
-    const targetHoop = findNearestHoop();
-    basketballVelocity = calculateShotTrajectory(targetHoop);
-    isbasketballFlying = true;
-    basketballRotation.set(0, 0, 0);
-    maxHeightDuringFlight = 0;
+  if (isbasketballFlying) return; 
+  shotInProgress = true;
+  collisionAlreadyDetected = false; 
+  const targetHoop = findNearestHoop();
+  basketballVelocity = calculateShotTrajectory(targetHoop);
+  isbasketballFlying = true;
+  basketballRotation.set(0, 0, 0);
+  maxHeightDuringFlight = 0;
 
-    console.log(`Shooting toward ${targetHoop.name} hoop with ${shotPower}% power`);
+  console.log(`Shooting toward ${targetHoop.name} hoop with ${shotPower}% power`);
 }
 
-// Reset basketball function
 function resetBasketball() {
-    if (!basketball) return;
+  if (!basketball) return;
     
-    // Reset position
-    basketball.position.set(0, groundY, 0);
+  // Reset position
+  basketball.position.set(0, groundY, 0);
     
-    // Reset physics
-    basketballVelocity.set(0, 0, 0);
-    isbasketballFlying = false;
-    basketballRotation.set(0, 0, 0);
-    basketball.rotation.set(0, 0, 0);
+  // Reset physics
+  basketballVelocity.set(0, 0, 0);
+  isbasketballFlying = false;
+  basketballRotation.set(0, 0, 0);
+  basketballAngularVelocity.set(0, 0, 0);
+  basketball.rotation.set(0, 0, 0);
     
-    // Reset shot power
-    shotPower = 50;
-    updatePowerDisplay();
+  // Reset all hoops
+  hoops.forEach(hoop => {
+    hoop.hasScored = false;
+  });
     
-    console.log("Basketball reset to center court");
+  shotInProgress = false;
+  collisionAlreadyDetected = false;
+
+  // Reset shot power
+  shotPower = 50;
+  updatePowerDisplay();
+    
+  console.log("Basketball reset to center court");
 }
+
+// ============================================================================
+// 8. USER INTERFACE SYSTEM
+// ============================================================================
+
+function updatePowerDisplay() {
+    const powerBar = document.getElementById('power-bar');
+    const powerText = document.getElementById('power-text');
+    
+    if (powerBar && powerText) {
+      powerBar.style.width = shotPower + '%';
+      powerText.textContent = Math.round(shotPower) + '%';
+        
+      if (shotPower < 30) {
+        powerBar.style.backgroundColor = '#00ff00'; // Green (low power)
+      } else if (shotPower < 70) {
+        powerBar.style.backgroundColor = '#ffff00'; // Yellow (medium power)
+      } else {
+        powerBar.style.backgroundColor = '#ff0000'; // Red (high power)
+      }
+    }
+}
+
+function updateScoreDisplay() {
+    const scoreDisplay = document.getElementById('score-number');
+    if (scoreDisplay) scoreDisplay.textContent = gameScore.totalScore;
+    
+    const shotsMade = document.getElementById('shots-made');
+    if (shotsMade) shotsMade.textContent = gameScore.shotsMade;
+    
+    const shotAttempts = document.getElementById('shots-attempted');
+    if (shotAttempts) shotAttempts.textContent = gameScore.shotAttempts;
+    
+    const shootingPercentage = document.getElementById('shooting-percentage');
+    if (shootingPercentage) shootingPercentage.textContent = gameScore.shootingPercentage + '%';
+}
+
+function showShotFeedback(message, isMiss) {
+    const feedback = document.getElementById('shot-feedback');
+    if (!feedback) return;
+    
+    feedback.textContent = message;
+    feedback.className = 'shot-feedback show' + (isMiss ? ' miss' : '');
+    
+    if (feedbackTimeout) clearTimeout(feedbackTimeout);
+    feedbackTimeout = setTimeout(() => {
+        feedback.className = 'shot-feedback';
+    }, 2000);
+}
+
+function updateShotPower() {
+    if (isbasketballFlying) return; 
+    
+    if (keys.KeyW) {
+        shotPower = Math.min(maxPower, shotPower + powerChangeSpeed);
+    }
+    if (keys.KeyS) {
+        shotPower = Math.max(minPower, shotPower - powerChangeSpeed);
+    }
+    
+    
+    // Update the power display in the UI
+    updatePowerDisplay();
+}
+
+
+// ============================================================================
+// 9. MOVEMENT & ANIMATION SYSTEM
+// ============================================================================
 
 function updateBasketballMovement() {
     if (!basketball || isbasketballFlying) return; // Don't move if ball is flying
@@ -827,89 +980,42 @@ function updateBasketballMovement() {
     // ---
 }
 
+// ============================================================================
+// 10. MAIN ANIMATION LOOP
+// ============================================================================
 
-// Handle key events
-function handleKeyDown(e) {
-  if (e.key === "o") {
-    isOrbitEnabled = !isOrbitEnabled;
-    return;
-  }
-   // Handle special keys
-  if (e.code === "Space") {
-    shootBasketball();
-    e.preventDefault();
-    return;
-  }
-    
-  if (e.code === "KeyR") {
-    resetBasketball();
-    e.preventDefault();
-    return;
-  }
-
-  // Basketball movement controls
-  if (keys.hasOwnProperty(e.code)) {
-    keys[e.code] = true;
-    e.preventDefault(); // Prevent page scrolling
-  }
-}
-
-function handleKeyUp(e) {
-  // Basketball movement controls
-  if (keys.hasOwnProperty(e.code)) {
-    keys[e.code] = false;
-    e.preventDefault(); // Prevent page scrolling
-  }
-}
-
-document.addEventListener('keydown', handleKeyDown);
-document.addEventListener('keyup', handleKeyUp);
-
-
-// --- FOR RESPONSIVE SECNE --- 
-function handleWindowResize() {
-  // Update camera aspect ratio to match new window size
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  
-  // Update renderer canvas size
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-// ---- 
-
-// Listen for window resize events
-window.addEventListener('resize', handleWindowResize);
-
-// Delta time calculation for smooth physics
 let lastTime = performance.now();
 
-// Animation function
 function animate() {
   requestAnimationFrame(animate);
   
-  // Calculate delta time for smooth physics
   const currentTime = performance.now();
-  const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+  const deltaTime = (currentTime - lastTime) / 1000; 
   lastTime = currentTime;
 
   updateBasketballMovement();
-
-  // Update shot power 
   updateShotPower();
-  
-  // Update basketball physics (when flying)
   updateBasketballPhysics(deltaTime);
-    
-  // Update controls
+  
   controls.enabled = isOrbitEnabled;
   controls.update();
   
   renderer.render(scene, camera);
 }
 
-animate();
+// ============================================================================
+// 11. INITIALIZATION
+// ============================================================================
 
-// Initialize power display when page loads 
+
+// Create all elements and the scene
+createBasketballCourt();
+
+// Initialize displays
+updateScoreDisplay();
 window.addEventListener('load', function() {
     updatePowerDisplay();
 });
+
+// Start animation loop
+animate();
