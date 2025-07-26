@@ -681,9 +681,14 @@ function checkRimCollision() {
             ballPos.y > rimPos.y - 0.15 &&   
             basketballVelocity.y < -0.05) {
             
-            if( horizontalDistance >= 0.8 && Math.abs(dy) <= 0.3){
-
-            }
+            basketballVelocity.x = 0;
+            basketballVelocity.z = 0;
+            basketballVelocity.y = Math.min(basketballVelocity.y, -0.3);
+            
+            basketballAngularVelocity.x = 0;
+            basketballAngularVelocity.z = 0;
+            basketballAngularVelocity.y *= 0.5; 
+            
             hoop.hasScored = true;
             collisionAlreadyDetected = true; 
             detectScore(2);
@@ -704,13 +709,14 @@ function handleGroundCollision() {
         const spinEffect = 0.1;
         basketballVelocity.x += basketballAngularVelocity.z * spinEffect;
         basketballVelocity.z -= basketballAngularVelocity.x * spinEffect;
-        basketballAngularVelocity.multiplyScalar(0.7);
 
         const randomFactor = 0.95 + Math.random() * 0.1; 
         basketballVelocity.multiplyScalar(randomFactor);
         
         if (Math.abs(basketballVelocity.y) < minimumBounceVelocity) {
             basketballVelocity.set(0, 0, 0);
+            basketballAngularVelocity.set(0, 0, 0); 
+
             isbasketballFlying = false;
 
             if (shotInProgress && !collisionAlreadyDetected) {
